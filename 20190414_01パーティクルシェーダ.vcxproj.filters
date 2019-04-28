@@ -121,7 +121,7 @@
     <FxCompile Include="particle.fx">
       <Filter>リソース ファイル</Filter>
     </FxCompile>
-    <FxCompile Include="BlurFilter.fx">
+    <FxCompile Include="data\EFFECT\BlurFilter.fx">
       <Filter>リソース ファイル</Filter>
     </FxCompile>
   </ItemGroup>

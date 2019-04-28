@@ -155,7 +155,7 @@
     <ClInclude Include="ScreenObject.h" />
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="BlurFilter.fx">
+    <FxCompile Include="data\EFFECT\BlurFilter.fx">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Effect</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">2.0</ShaderModel>
     </FxCompile>

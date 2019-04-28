@@ -1,5 +1,6 @@
 #include "Particle.h"
 #include "debugWindow.h"
+#include "BlurFilter.h"
 
 /************************************
 ƒ}ƒNƒ’è‹`
@@ -44,8 +45,7 @@ static LPDIRECT3DSURFACE9 colorSurface, bloomSurface;
 static LPDIRECT3DSURFACE9 blurSurface[2];
 
 static LPDIRECT3DVERTEXBUFFER9 screenBuff;
-
-static LPD3DXEFFECT blurFilter;
+static BlurFilter *blurFilter;
 
 /************************************
 ‰Šú‰»ˆ—
@@ -118,7 +118,6 @@ void InitParticle(void)
 	indexBuff->Unlock();
 
 	D3DXCreateEffectFromFile(pDevice, "particle.fx", 0, 0, 0, 0, &effect, 0);
-	D3DXCreateEffectFromFile(pDevice, "BlurFilter.fx", 0, 0, 0, 0, &blurFilter, 0);
 
 	pDevice->CreateTexture(SCREEN_WIDTH,
 		SCREEN_HEIGHT,
@@ -185,17 +184,8 @@ void InitParticle(void)
 
 	screenBuff->Unlock();
 
-	float texelU = 1.0f / (SCREEN_WIDTH / 2.0f);
-	float texelV = 1.0f / (SCREEN_HEIGHT / 2.0f);
-	float u[5], v[5];
-	for (int i = 0; i < 5; i++)
-	{
-		u[i] = texelU * (i + 1);
-		v[i] = texelV * (i + 1);
-	}
-
-	blurFilter->SetFloatArray("texelU", u, 5);
-	blurFilter->SetFloatArray("texelV", u, 5);
+	blurFilter = new BlurFilter();
+	blurFilter->SetSurfaceSize(SCREEN_WIDTH / 2.0f, SCREEN_HEIGHT / 2.0f);
 
 	pDevice->SetRenderState(D3DRS_ALPHATESTENABLE, true);
 	pDevice->SetRenderState(D3DRS_ALPHAREF, 0);
@@ -211,7 +201,6 @@ void UninitParticle(void)
 	SAFE_RELEASE(uvBuff);
 	SAFE_RELEASE(declare);
 	SAFE_RELEASE(effect);
-	SAFE_RELEASE(blurFilter);
 
 	SAFE_RELEASE(colorTexture);
 	SAFE_RELEASE(colorSurface);
@@ -222,6 +211,8 @@ void UninitParticle(void)
 		SAFE_RELEASE(blurTexture[i]);
 		SAFE_RELEASE(blurSurface[i]);
 	}
+
+	delete blurFilter;
 }
 
 /************************************
@@ -392,27 +383,13 @@ void ProcessBlur()
 
 	pDevice->SetRenderTarget(0, blurSurface[0]);
 	pDevice->SetTexture(0, bloomTexture);
-	blurFilter->SetTechnique("tech");
-	blurFilter->Begin(0, 0);
-	blurFilter->BeginPass(0);
-
-	pDevice->DrawPrimitive(D3DPT_TRIANGLESTRIP, 0, NUM_POLYGON);
-
-	blurFilter->EndPass();
-	blurFilter->End();
+	blurFilter->Draw(0);
 
 	for (int i = 0; i < 10; i++)
 	{
 		pDevice->SetRenderTarget(0, blurSurface[(i + 1) % 2]);
 		pDevice->SetTexture(0, blurTexture[i % 2]);
-		blurFilter->SetTechnique("tech");
-		blurFilter->Begin(0, 0);
-		blurFilter->BeginPass((i + 1) % 2);
-
-		pDevice->DrawPrimitive(D3DPT_TRIANGLESTRIP, 0, NUM_POLYGON);
-
-		blurFilter->EndPass();
-		blurFilter->End();
+		blurFilter->Draw((i + 1) % 2);
 	}
 
 	pDevice->SetSamplerState(0, D3DSAMP_ADDRESSU, D3DTADDRESS_WRAP);
@@ -421,8 +398,8 @@ void ProcessBlur()
 	pDevice->SetViewport(&oldViewPort);
 
 	ResizeScreenBuff(SCREEN_WIDTH, SCREEN_HEIGHT);
+	pDevice->SetStreamSource(0, screenBuff, 0, sizeof(VERTEX_2D));
 	pDevice->SetRenderTarget(0, bloomSurface);
-	pDevice->Clear(0, 0, D3DCLEAR_TARGET, 0, 0, 0);
 	pDevice->SetTexture(0, blurTexture[1]);
 
 	pDevice->DrawPrimitive(D3DPT_TRIANGLESTRIP, 0, NUM_POLYGON);
@@ -437,6 +414,7 @@ void BlendBloom(bool useBloom)
 {
 	LPDIRECT3DDEVICE9 pDevice = GetDevice();
 
+	pDevice->SetStreamSource(0, screenBuff, 0, sizeof(VERTEX_2D));
 	pDevice->SetTexture(0, colorTexture);
 	pDevice->DrawPrimitive(D3DPT_TRIANGLESTRIP, 0, NUM_POLYGON);
 

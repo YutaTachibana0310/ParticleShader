@@ -29,6 +29,7 @@ BlurFilter::BlurFilter()
 	D3DXCreateEffectFromFile(pDevice, (LPSTR)EFFECTFILE_BLUR_PATH, 0, 0, 0, 0, &effect, 0);
 	effect->GetParameterByName(texelU, "texelU");
 	effect->GetParameterByName(texelV, "texelV");
+	effect->SetTechnique("tech");
 }
 
 /**************************************
