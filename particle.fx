@@ -1,16 +1,25 @@
-float4x4 mtxView;
-float4x4 mtxProj;
-float4x4 mtxInvView;
-float threthold;
+float4x4 mtxView;		//ビュー行列
+float4x4 mtxProj;		//プロジェクション行列
+float4x4 mtxInvView;	//ビュー逆行列
+float threthold;		//明度を抽出するしきい値（インスタンシングには関係ない）
 
+/**************************************************************
+テクスチャサンプラー（0番にSetTextureしたテクスチャを使用する
+***************************************************************/
 sampler s0 : register(s0);
 
+/**************************************************************
+頂点シェーダ出力構造体
+***************************************************************/
 struct VS_OUTPUT {
 	float4 pos : POSITION;
 	float2 uv : TEXCOORD0;
 	float4 color : COLOR0;
 };
 
+/**************************************************************
+頂点シェーダ
+***************************************************************/
 VS_OUTPUT vsMain(
 	float3 pos : POSITION,
 	float2 localUV : TEXCOORD0,
@@ -21,12 +30,6 @@ VS_OUTPUT vsMain(
 ) {
 	VS_OUTPUT Out;
 
-	float4x4 mtxWorld = {
-		1, 0, 0, 0,
-		0, 1, 0, 0,
-		0, 0, 1, 0,
-		0, 0, 0, 1
-	};
 	Out.pos = float4(pos, 1.0f);
 
 	//scale
@@ -57,32 +60,51 @@ VS_OUTPUT vsMain(
 	Out.pos.y = Out.pos.y + worldPos.y;
 	Out.pos.z = Out.pos.z + worldPos.z;
 
+	//view & projection
 	Out.pos = mul(Out.pos, mtxView);
 	Out.pos = mul(Out.pos, mtxProj);
 
+	//texUV
 	Out.uv = localUV + texUV;
 
+	//Color
 	Out.color = float4(1.0f, 1.0f, 1.0f, 1.0f);
 
 	return Out;
 }
 
+/**************************************************************
+ピクセルシェーダ出力構造体
+***************************************************************/
 struct PS_OUTPUT
 {
 	float4 color1 : COLOR0; //カラー情報
 	float4 color2 : COLOR1; //輝度情報
 };
 
-PS_OUTPUT psMain(VS_OUTPUT In){
+/**************************************************************
+ピクセルシェーダ
+***************************************************************/
+PS_OUTPUT psMain(VS_OUTPUT In)
+{
 	PS_OUTPUT Out;
+
+	//テクスチャからカラーを取得
 	Out.color1 = tex2D(s0, In.uv) * In.color;
 
+	//輝度を計算(インスタンシングには関係なし)
 	const float3 perception = float3(0.2126f, 0.7152f, 0.0722f);
 	float brightness = dot(perception, float3(Out.color1.r, Out.color1.g, Out.color1.b));
+
+	//輝度がしきい値以下のテクセルは黒にする（インスタンシングには関係ない）
 	Out.color2 = lerp(float4(0.0f, 0.0f, 0.0f, 0.0f), Out.color1, step(threthold, brightness));
+
 	return Out;
 }
 
+/**************************************************************
+テクニック
+***************************************************************/
 technique tech {
 	pass p0 {
 		VertexShader = compile vs_2_0 vsMain();

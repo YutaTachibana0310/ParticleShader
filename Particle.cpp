@@ -21,6 +21,7 @@ void ResizeScreenBuff(float width, float height);
 static Transform trasnform;
 static ParticleTex uv;
 
+//パーティクルの単位頂点
 static ParticleVertex vtx[4] =
 {
 	{ D3DXVECTOR3(-10.0f,  10.0f, 0.0f), D3DXVECTOR2(0.0f, 0.0)},
@@ -29,21 +30,32 @@ static ParticleVertex vtx[4] =
 	{ D3DXVECTOR3(10.0f, -10.0f, 0.0f), D3DXVECTOR2(1.0f, 1.0) },
 };
 
-static LPDIRECT3DVERTEXBUFFER9 vtxBuff;
-static LPDIRECT3DVERTEXBUFFER9 worldBuff;
-static LPDIRECT3DVERTEXBUFFER9 uvBuff;
-static LPDIRECT3DVERTEXBUFFER9 anotherVtx;
+//各種頂点バッファ
+static LPDIRECT3DVERTEXBUFFER9 vtxBuff;		//単位頂点用
+static LPDIRECT3DVERTEXBUFFER9 worldBuff;	//ワールド変換用
+static LPDIRECT3DVERTEXBUFFER9 uvBuff;		//個別のテクスチャ
 
+static LPDIRECT3DVERTEXBUFFER9 anotherVtx;	//テスト用に普通に描画する用
+
+//頂点宣言
 static LPDIRECT3DVERTEXDECLARATION9 declare;
+
+//シェーダ
 static LPD3DXEFFECT effect;
+
+//インデックスバッファ
 static LPDIRECT3DINDEXBUFFER9 indexBuff;
+
+//テクスチャ
 static LPDIRECT3DTEXTURE9 texture;
 
+//レンダリングターゲット用のテクスチャ（インスタンシングには関係ない）
 static LPDIRECT3DTEXTURE9 colorTexture, bloomTexture;
 static LPDIRECT3DTEXTURE9 blurTexture[2];
 static LPDIRECT3DSURFACE9 colorSurface, bloomSurface;
 static LPDIRECT3DSURFACE9 blurSurface[2];
 
+//最終的な描画用の頂点バッファ（インスタンシングには関係ない）
 static LPDIRECT3DVERTEXBUFFER9 screenBuff;
 static BlurFilter *blurFilter;
 
@@ -54,20 +66,25 @@ void InitParticle(void)
 {
 	LPDIRECT3DDEVICE9 pDevice = GetDevice();
 
+	//テクスチャ読み込みして設定
 	texture = CreateTextureFromFile((LPSTR)"bulletParticle.png", pDevice);
-
 	pDevice->SetTexture(0, texture);
 
+	//頂点バッファ作成
 	pDevice->CreateVertexBuffer(sizeof(vtx), 0, 0, D3DPOOL_MANAGED, &vtxBuff, 0);
 	pDevice->CreateVertexBuffer(sizeof(Transform) * PARTICLE_NUM, 0, 0, D3DPOOL_MANAGED, &worldBuff, 0);
 	pDevice->CreateVertexBuffer(sizeof(ParticleTex) * PARTICLE_NUM, 0, 0, D3DPOOL_MANAGED, &uvBuff, 0);
+
+	//普通描画用の頂点バッファ作成
 	pDevice->CreateVertexBuffer(sizeof(VERTEX_3D) * 4, D3DUSAGE_WRITEONLY, FVF_VERTEX_3D, D3DPOOL_MANAGED, &anotherVtx, 0);
 
+	//単位頂点の中身を埋める
 	ParticleVertex *pVtx;
 	vtxBuff->Lock(0, 0, (void**)&pVtx, 0);
 	memcpy(pVtx, vtx, sizeof(vtx));
 	vtxBuff->Unlock();
 
+	//頂点バッファ（ワールド変換用）の中身を埋める
 	Transform *pTr;
 	worldBuff->Lock(0, 0, (void**)&pTr, 0);
 	for (int i = 0; i < PARTICLE_NUM; i++, pTr++)
@@ -78,6 +95,7 @@ void InitParticle(void)
 	}
 	worldBuff->Unlock();
 
+	//頂点バッファ（テクスチャ用）の中身を埋める
 	ParticleTex *pTex;
 	uvBuff->Lock(0, 0, (void**)&pTex, 0);
 	for (int i = 0; i < PARTICLE_NUM; i++, pTex++)
@@ -86,6 +104,7 @@ void InitParticle(void)
 	}
 	uvBuff->Unlock();
 
+	//普通の描画用の中身を埋める
 	VERTEX_3D *pVertex;
 	anotherVtx->Lock(0, 0, (void**)&pVertex, 0);
 	pVertex[0].vtx = D3DXVECTOR3(-10.0f, 10.0f, 0.0f);
@@ -98,97 +117,30 @@ void InitParticle(void)
 	pVertex[3].diffuse = D3DXCOLOR(1.0f, 1.0f, 1.0f, 1.0f);
 	anotherVtx->Unlock();
 
+	//頂点宣言を作成
 	D3DVERTEXELEMENT9 elems[] =
 	{
-		{0, 0, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0},
-		{0, 12, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0},
-		{1, 0, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 1},
-		{1, 12, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 2},
-		{1, 24, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 3},
-		{2, 0, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 4},
+		{0, 0, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0},	//単位頂点（頂点座標）
+		{0, 12, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0},	//単位頂点（テクスチャ座標）
+		{1, 0, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 1},	//ワールド変換情報（ポジション）
+		{1, 12, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 2},	//ワールド変換情報（ローテーション）
+		{1, 24, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 3},	//ワールド変換情報（スケール）
+		{2, 0, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 4},	//個別のテクスチャ
 		D3DDECL_END()
 	};
 	pDevice->CreateVertexDeclaration(elems, &declare);
 
+	//インデックスバッファ作成
 	WORD index[6] = { 0, 1, 2, 2, 1, 3 };
 	pDevice->CreateIndexBuffer(sizeof(index), 0, D3DFMT_INDEX16, D3DPOOL_MANAGED, &indexBuff, NULL);
 	void *p;
+	//中身を埋める
 	indexBuff->Lock(0, 0, &p, 0);
 	memcpy(p, index, sizeof(index));
 	indexBuff->Unlock();
 
+	//シェーダ読み込み
 	D3DXCreateEffectFromFile(pDevice, "particle.fx", 0, 0, 0, 0, &effect, 0);
-
-	pDevice->CreateTexture(SCREEN_WIDTH,
-		SCREEN_HEIGHT,
-		1,
-		D3DUSAGE_RENDERTARGET,
-		D3DFMT_X8R8G8B8,
-		D3DPOOL_DEFAULT,
-		&colorTexture,
-		NULL);
-	colorTexture->GetSurfaceLevel(0, &colorSurface);
-
-	pDevice->CreateTexture(SCREEN_WIDTH,
-		SCREEN_HEIGHT,
-		1,
-		D3DUSAGE_RENDERTARGET,
-		D3DFMT_X8R8G8B8,
-		D3DPOOL_DEFAULT,
-		&bloomTexture,
-		NULL);
-	bloomTexture->GetSurfaceLevel(0, &bloomSurface);
-
-	for (int i = 0; i < 2; i++)
-	{
-		pDevice->CreateTexture(SCREEN_WIDTH / 2,
-			SCREEN_HEIGHT / 2,
-			1,
-			D3DUSAGE_RENDERTARGET,
-			D3DFMT_X8R8G8B8,
-			D3DPOOL_DEFAULT,
-			&blurTexture[i],
-			NULL);
-		blurTexture[i]->GetSurfaceLevel(0, &blurSurface[i]);
-	}
-
-	pDevice->CreateVertexBuffer(sizeof(VERTEX_2D) * 4,
-		D3DUSAGE_WRITEONLY,
-		FVF_VERTEX_2D,
-		D3DPOOL_MANAGED,
-		&screenBuff,
-		NULL);
-
-	VERTEX_2D *pScreen;
-	screenBuff->Lock(0, 0, (void**)&pScreen, 0);
-	pScreen[0].vtx = D3DXVECTOR3(0.0f, 0.0f, 0.0f);
-	pScreen[1].vtx = D3DXVECTOR3((float)SCREEN_WIDTH, 0.0f, 0.0f);
-	pScreen[2].vtx = D3DXVECTOR3(0.0f, (float)SCREEN_HEIGHT, 0.0f);
-	pScreen[3].vtx = D3DXVECTOR3((float)SCREEN_WIDTH, (float)SCREEN_HEIGHT, 0.0f);
-
-	float tmp = 0.0f;
-	pScreen[0].tex = D3DXVECTOR2(0.0f + 0.5f / (float)SCREEN_WIDTH, 0.0f + 0.5f / (float)SCREEN_HEIGHT);
-	pScreen[1].tex = D3DXVECTOR2(1.0f + 0.5f / (float)SCREEN_WIDTH, 0.0f + 0.5f / (float)SCREEN_HEIGHT);
-	pScreen[2].tex = D3DXVECTOR2(0.0f + 0.5f / (float)SCREEN_WIDTH, 1.0f + 0.5f / (float)SCREEN_HEIGHT);
-	pScreen[3].tex = D3DXVECTOR2(1.0f + 0.5f / (float)SCREEN_WIDTH, 1.0f + 0.5f / (float)SCREEN_HEIGHT);
-
-	pScreen[0].rhw =
-		pScreen[1].rhw =
-		pScreen[2].rhw =
-		pScreen[3].rhw = 1.0f;
-
-	pScreen[0].diffuse =
-		pScreen[1].diffuse =
-		pScreen[2].diffuse =
-		pScreen[3].diffuse = D3DXCOLOR(1.0f, 1.0f, 1.0f, 1.0f);
-
-	screenBuff->Unlock();
-
-	blurFilter = new BlurFilter();
-	blurFilter->SetSurfaceSize(SCREEN_WIDTH / 2.0f, SCREEN_HEIGHT / 2.0f);
-
-	pDevice->SetRenderState(D3DRS_ALPHATESTENABLE, true);
-	pDevice->SetRenderState(D3DRS_ALPHAREF, 0);
 }
 
 /************************************
@@ -234,16 +186,19 @@ void DrawParticle(void)
 	static bool useBloom = false;
 
 	pDevice->SetRenderState(D3DRS_LIGHTING, false);
-
+	
+	//デバッグ用入力判定
 	if (GetKeyboardTrigger(DIK_F1))
 		useEffect = !useEffect;
 	if (GetKeyboardTrigger(DIK_F2))
 		useBloom = !useBloom;
 
-	if (useEffect)
+	//インスタンシング描画
+	//if (useEffect)
 	{
-		DrawColorAndBloom();
+		DrawColorAndBloom();	//ここが一番重要
 
+		//ここから下は加算合成なので直接は関係ない
 		if (useBloom)
 		{
 			pDevice->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_ONE);
@@ -253,42 +208,8 @@ void DrawParticle(void)
 			pDevice->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
 		}
 	}
-	else
-	{
-		LPDIRECT3DSURFACE9 oldSuf = NULL;
-		pDevice->GetRenderTarget(0, &oldSuf);
-		pDevice->SetRenderTarget(0, colorSurface);
-		pDevice->SetRenderTarget(1, bloomSurface);
 
-		pDevice->Clear(0, NULL, D3DCLEAR_TARGET, 0, 1.0f, 0);
-
-		DrawColorAndBloom();
-
-		BeginDebugWindow("Color & Bloom");
-		DebugDrawTexture(colorTexture, SCREEN_WIDTH / 5.0f, SCREEN_HEIGHT / 5.0f);
-		DebugDrawTexture(bloomTexture, SCREEN_WIDTH / 5.0f, SCREEN_HEIGHT / 5.0f);
-		EndDebugWindow("Color & Bloom");
-
-		pDevice->SetRenderTarget(1, NULL);
-
-		pDevice->SetStreamSource(0, screenBuff, 0, sizeof(VERTEX_2D));
-		pDevice->SetFVF(FVF_VERTEX_2D);
-
-		ResizeScreenBuff(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
-		ProcessBlur();
-
-		BeginDebugWindow("Blur");
-		DebugDrawTexture(blurTexture[1], SCREEN_WIDTH / 5.0f, SCREEN_HEIGHT / 5.0f);
-		DebugDrawTexture(blurTexture[1], SCREEN_WIDTH / 5.0f, SCREEN_HEIGHT / 5.0f);
-		EndDebugWindow("Blur");
-
-		pDevice->SetRenderTarget(0, oldSuf);
-		SAFE_RELEASE(oldSuf);
-
-		ResizeScreenBuff(SCREEN_WIDTH, SCREEN_HEIGHT);
-		BlendBloom(useBloom);
-	}
-
+	//デバッグ表示処理
 	BeginDebugWindow("Particle");
 
 	if (useEffect)
@@ -308,142 +229,63 @@ void DrawParticle(void)
 
 	EndDebugWindow("Particle");
 }
-
+/*****************************************************
+インスタンシングをした描画処理
+******************************************************/
 void DrawColorAndBloom()
 {
 	LPDIRECT3DDEVICE9 pDevice = GetDevice();
 
+	//Zバッファへ書き込まない
 	pDevice->SetRenderState(D3DRS_ZENABLE, false);
 
+	//ストリームソース周波数を設定
 	pDevice->SetStreamSourceFreq(0, D3DSTREAMSOURCE_INDEXEDDATA | PARTICLE_NUM);
 	pDevice->SetStreamSourceFreq(1, D3DSTREAMSOURCE_INSTANCEDATA | 1);
 	pDevice->SetStreamSourceFreq(2, D3DSTREAMSOURCE_INSTANCEDATA | 1);
 
+	//頂点宣言設定
 	pDevice->SetVertexDeclaration(declare);
 
+	//テクスチャ設定
 	pDevice->SetTexture(0, texture);
 
+	//ストリームソース設定
 	pDevice->SetStreamSource(0, vtxBuff, 0, sizeof(ParticleVertex));
 	pDevice->SetStreamSource(1, worldBuff, 0, sizeof(Transform));
 	pDevice->SetStreamSource(2, uvBuff, 0, sizeof(ParticleTex));
 	pDevice->SetIndices(indexBuff);
 
+	//ビュー行列、プロジェクション行列、ビュー逆行列
 	D3DXMATRIX  view, proj, invView;
+
+	//ビュー、プロジェクション行列を取得
 	pDevice->GetTransform(D3DTS_VIEW, &view);
 	pDevice->GetTransform(D3DTS_PROJECTION, &proj);
 
+	//ビルボード用に逆行列を計算
 	D3DXMatrixInverse(&invView, NULL, &view);
 	invView._41 = invView._42 = invView._43 = 0.0f;
 
+	//シェーダに行列を設定
 	effect->SetMatrix("mtxView", &view);
 	effect->SetMatrix("mtxProj", &proj);
 	effect->SetMatrix("mtxInvView", &invView);
 
+	//シェーダによる描画開始
 	effect->SetTechnique("tech");
 	effect->Begin(0, 0);
 	effect->BeginPass(0);
 
 	pDevice->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, 0, 4, 0, 2);
-	//pDevice->DrawPrimitive(D3DPT_TRIANGLESTRIP, 0, 2);
 
 	effect->EndPass();
 	effect->End();
 
+	//描画が終わったのでストリームソースを元に戻す
 	pDevice->SetStreamSourceFreq(0, 1);
 	pDevice->SetStreamSourceFreq(1, 1);
 	pDevice->SetStreamSourceFreq(2, 1);
 
 	pDevice->SetRenderState(D3DRS_ZENABLE, true);
-}
-
-void ProcessBlur()
-{
-	LPDIRECT3DDEVICE9 pDevice = GetDevice();
-
-	pDevice->SetRenderState(D3DRS_ZENABLE, false);
-
-	pDevice->SetSamplerState(0, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP);
-	pDevice->SetSamplerState(0, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP);
-
-	D3DVIEWPORT9 oldViewPort, newViewPort;
-	pDevice->GetViewport(&oldViewPort);
-	newViewPort.Width = SCREEN_WIDTH / 2;
-	newViewPort.Height = SCREEN_HEIGHT / 2;
-	newViewPort.MaxZ = 1.0f;
-	newViewPort.MinZ = 0.0f;
-	newViewPort.X = 0;
-	newViewPort.Y = 0;
-	pDevice->SetViewport(&newViewPort);
-
-	for (int i = 0; i < 2; i++)
-	{
-		pDevice->SetRenderTarget(0, blurSurface[i]);
-		pDevice->Clear(0, 0, D3DCLEAR_TARGET, 0, 0, 0);
-	}
-
-	pDevice->SetRenderTarget(0, blurSurface[0]);
-	pDevice->SetTexture(0, bloomTexture);
-	blurFilter->Draw(0);
-
-	for (int i = 0; i < 10; i++)
-	{
-		pDevice->SetRenderTarget(0, blurSurface[(i + 1) % 2]);
-		pDevice->SetTexture(0, blurTexture[i % 2]);
-		blurFilter->Draw((i + 1) % 2);
-	}
-
-	pDevice->SetSamplerState(0, D3DSAMP_ADDRESSU, D3DTADDRESS_WRAP);
-	pDevice->SetSamplerState(0, D3DSAMP_ADDRESSV, D3DTADDRESS_WRAP);
-
-	pDevice->SetViewport(&oldViewPort);
-
-	ResizeScreenBuff(SCREEN_WIDTH, SCREEN_HEIGHT);
-	pDevice->SetStreamSource(0, screenBuff, 0, sizeof(VERTEX_2D));
-	pDevice->SetRenderTarget(0, bloomSurface);
-	pDevice->SetTexture(0, blurTexture[1]);
-
-	pDevice->DrawPrimitive(D3DPT_TRIANGLESTRIP, 0, NUM_POLYGON);
-	pDevice->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
-
-	BeginDebugWindow("Blend");
-	DebugDrawTexture(bloomTexture, SCREEN_WIDTH / 5.0f, SCREEN_HEIGHT / 5.0f);
-	EndDebugWindow("Blend");
-}
-
-void BlendBloom(bool useBloom)
-{
-	LPDIRECT3DDEVICE9 pDevice = GetDevice();
-
-	pDevice->SetStreamSource(0, screenBuff, 0, sizeof(VERTEX_2D));
-	pDevice->SetTexture(0, colorTexture);
-	pDevice->DrawPrimitive(D3DPT_TRIANGLESTRIP, 0, NUM_POLYGON);
-
-	pDevice->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_ONE);
-
-	if (useBloom)
-	{
-		pDevice->SetTexture(0, bloomTexture);
-		pDevice->DrawPrimitive(D3DPT_TRIANGLESTRIP, 0, NUM_POLYGON);
-	}
-
-	pDevice->SetRenderState(D3DRS_ZENABLE, true);
-	pDevice->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
-}
-
-void ResizeScreenBuff(float width, float height)
-{
-	VERTEX_2D *pVtx;
-	screenBuff->Lock(0, 0, (void**)&pVtx, 0);
-
-	pVtx[0].vtx = D3DXVECTOR3(0.0f, 0.0f, 0.0f);
-	pVtx[1].vtx = D3DXVECTOR3(width, 0.0f, 0.0f);
-	pVtx[2].vtx = D3DXVECTOR3(0.0f, height, 0.0f);
-	pVtx[3].vtx = D3DXVECTOR3(width, height, 0.0f);
-
-	pVtx[0].tex = D3DXVECTOR2(0.0f + 0.5f / (float)width, 0.0f + 0.5f / (float)height);
-	pVtx[1].tex = D3DXVECTOR2(1.0f + 0.5f / (float)width, 0.0f + 0.5f / (float)height);
-	pVtx[2].tex = D3DXVECTOR2(0.0f + 0.5f / (float)width, 1.0f + 0.5f / (float)height);
-	pVtx[3].tex = D3DXVECTOR2(1.0f + 0.5f / (float)width, 1.0f + 0.5f / (float)height);
-
-	screenBuff->Unlock();
 }

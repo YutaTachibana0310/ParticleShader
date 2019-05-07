@@ -73,8 +73,8 @@ void UpdateCamera(void)
 	camera.rot.y += D3DXToRadian(CAMERA_ROTVALUE_Y * x);
 	camera.dist -= y * CAMERA_DIST_MOVEVAL;
 
-	camera.pos.x = cosf(camera.rot.y) * camera.dist;
-	camera.pos.z = sinf(camera.rot.y) * camera.dist;
+	camera.pos.x = sinf(camera.rot.y) * camera.dist;
+	camera.pos.z = -cosf(camera.rot.y) * camera.dist;
 }
 
 //=============================================================================
